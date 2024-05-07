@@ -1,0 +1,45 @@
+fastvcs is a replacement for vcs_info in zsh. It runs about twice as fast as the
+builtin function.
+
+Most of what this program does is read the first line of `git status --branch
+-uno --porcelain=v1`, but that's about all I've ever needed anyway.
+
+There is no configuration. If there is something you want to change (colors, vcs
+program, etc) you will have to recompile the program.
+
+Build with
+
+	make
+
+Add to PATH with
+
+	make install
+
+And then add to your zsh prompt with something like this:
+
+	setopt PROMPT_SUBST
+	PS1+=' $(fastvcs)'
+
+
+test.sh will run zsh with an empty .zshrc, one with fastvcs, and one with the
+builtin vcs_info, so you can compare the differences.
+
+Here is a sample test for this project:
+
+	Benchmark 1: ZDOTDIR=./test/slowvcs/ zsh -i -c exit
+	  Time (mean ± σ):     102.7 ms ±   3.8 ms    [User: 50.1 ms, System: 42.5 ms]
+	  Range (min … max):    98.5 ms … 116.1 ms    29 runs
+
+	Benchmark 2: ZDOTDIR=./test/fastvcs/ zsh -i -c exit
+	  Time (mean ± σ):      53.2 ms ±   1.6 ms    [User: 24.0 ms, System: 22.3 ms]
+	  Range (min … max):    51.1 ms …  59.6 ms    54 runs
+
+	Benchmark 3: ZDOTDIR=./test/baseline/ zsh -i -c exit
+	  Time (mean ± σ):      23.8 ms ±   1.1 ms    [User: 11.0 ms, System: 9.7 ms]
+	  Range (min … max):    22.8 ms …  29.2 ms    96 runs
+
+	Summary
+	  ZDOTDIR=./test/baseline/ zsh -i -c exit ran
+	    2.24 ± 0.12 times faster than ZDOTDIR=./test/fastvcs/ zsh -i -c exit
+	    4.32 ± 0.25 times faster than ZDOTDIR=./test/slowvcs/ zsh -i -c exit
+
