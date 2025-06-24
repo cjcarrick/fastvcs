@@ -1,71 +1,79 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
-#define MAX_BRANCH_SIZE 64
+#define max(a, b) ((a) > (b) ? (a) : (b))
+#define min(a, b) ((a) < (b) ? (a) : (b))
 
-void eat_rest_of_line(FILE*file) {
-	char c;
-	while (!feof(file) && c != '\n') {
-		c = fgetc(file);
-	}
+char *GIT_CMD[] = { "/bin/git", "status", "-zbu", "--porcelain=v2", NULL };
+
+void
+die(const char *msg)
+{
+	perror(msg);
+	exit(1);
+}
+
+void
+put(const char *s)
+{
+	while (*s)
+		putchar(*s++);
 }
 
 int main()
 {
-	int has_modified_files = 0;
-	int has_staged_files = 0;
-	char c;
-	int exit_code = 0;
-	char branch[MAX_BRANCH_SIZE] = "";
+	char buf[BUFSIZ];
+	const char *line = buf;
+	int nread;
 
-	FILE *proc = popen("/usr/bin/git status --branch -uno --porcelain=v1 2>&1", "r");
-	if (feof(proc)) {
-		exit_code = 1;
-		goto cleanup;
+	const char *branch = 0;
+	int has_staged = 0;
+	int has_unstaged = 0;
+
+	int fds[2], child;
+	if (pipe(fds)) {
+		die("pipe");
 	}
 
-	// catch `fatal: not a git repository...'
-	if ((c = fgetc(proc)) == 'f') {
-		goto cleanup;
+	child = fork();
+	if (child < 0) {
+		die("fork");
+	}
+	if (child == 0) {
+		close(fds[0]);
+		dup2(fds[1], STDOUT_FILENO);
+		dup2(fds[1], STDERR_FILENO);
+		execve(GIT_CMD[0], GIT_CMD, NULL);
+		die("execve");
 	}
 
-	// output from git is `## branch-name`
-	if (c == '#') {
-		fgetc(proc); fgetc(proc);
-		fgets(branch, MAX_BRANCH_SIZE - 5, proc);
-		c = fgetc(proc);
-		// remove traling newline
-		branch[strcspn(branch, "\n")] = 0;
-	}
-	
+	nread = read(fds[0], buf, sizeof(buf));
 
-	// Scan each line of git status to determine whether there are any
-	// modified files or staged changes
-	while (!feof(proc)) {
-		if (!has_staged_files && c != ' ') {
-			has_staged_files = 1;
-		}
-		else if (!has_modified_files && (c == ' ') && ((c = fgetc(proc)) != ' ')) {
-			has_modified_files = 1;
-		}
-		if (has_modified_files && has_staged_files) {
+	/* "fatal: not a git repository..." */
+	if (buf[0] == 'f')
+		return 0;
+
+	while (line < buf + nread) {
+		if (!branch && !strncmp(line, "# branch.head ", strlen("# branch.head ")))
+			branch = line + strlen("# branch.head ");
+		has_unstaged = has_unstaged || ((line[0] == '1' || line[0] == '2') && line[2] == 'M');
+		has_staged = has_staged || ((line[0] == '1' || line[0] == '2') && line[3] == 'M');
+		if (branch && has_staged && has_unstaged)
 			break;
-		}
-		eat_rest_of_line(proc);
-		c = fgetc(proc);
+		line = strchr(line, 0);
+		++line;
 	}
 
-	fputs("%F{magenta}[%F{green}", stdout);
-	fputs(branch, stdout);
-	if (has_modified_files) {
-		fputs("%F{red} *", stdout);
-	}
-	if (has_staged_files) {
-		fputs("%F{yellow} +", stdout);
-	}
-	fputs("%F{magenta}]%f", stdout);
+	#define writes(s) write(STDOUT_FILENO, s, strlen(s))
+	writes(" %F{8}[%F{green}");
+	writes(branch);
+	if (has_staged)
+		writes("%F{red} *");
+	if (has_unstaged)
+		writes("%F{yellow} +");
+	writes("%F{8}]");
 
-cleanup:
-	pclose(proc);
-	return exit_code;
+	return 0;
 }

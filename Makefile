@@ -1,6 +1,5 @@
-ifndef CFLAGS
-	CFLAGS=-O3
-endif
+CFLAGS += -std=c89 -Wall -Wpedantic \
+		  -O2 -march=native -mtune=native
 
 all: fastvcs.c
 	$(CC) $(CFLAGS) $^ -o fastvcs
