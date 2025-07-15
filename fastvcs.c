@@ -3,10 +3,10 @@
 #include <string.h>
 #include <unistd.h>
 
-#define max(a, b) ((a) > (b) ? (a) : (b))
-#define min(a, b) ((a) < (b) ? (a) : (b))
+#define GIT_REPO_FOLDER ".git"
+char path[255 + sizeof(GIT_REPO_FOLDER)];
 
-char *GIT_CMD[] = { "/bin/git", "status", "-zbu", "--porcelain=v2", NULL };
+char *GIT_CMD[] = { "/bin/git", "--git-dir", (char*)&path, "status", "-zbu", "--porcelain=v2", NULL };
 
 void
 die(const char *msg)
@@ -15,14 +15,40 @@ die(const char *msg)
 	exit(1);
 }
 
-void
-put(const char *s)
+int
+findgit(void)
 {
-	while (*s)
-		putchar(*s++);
+	char *p;
+
+	if (!getcwd(path, sizeof(path)))
+		die("getcwd");
+	p = path + strlen(path);
+	*p++ = '/';
+
+	while (p > path) {
+		/* append ".git" to cwd */
+		memcpy(p, GIT_REPO_FOLDER, sizeof(GIT_REPO_FOLDER));
+
+		if (access(path, R_OK) == 0) {
+			return 1;
+		}
+
+		/* skip trailing '\0' and '/' */
+		p -= 2;
+
+		/* pop chars until we reach the next trailing '/' */
+		while (p > path && *p != '/')
+			--p;
+
+		/* but keep the trailing '/' */
+		++p;
+	}
+
+	return 0;
 }
 
-int main()
+int
+main(int argc, char **argv)
 {
 	char buf[BUFSIZ];
 	const char *line = buf;
@@ -33,6 +59,10 @@ int main()
 	int has_unstaged = 0;
 
 	int fds[2], child;
+
+	if (!findgit())
+		return 0;
+
 	if (pipe(fds)) {
 		die("pipe");
 	}
@@ -67,13 +97,13 @@ int main()
 	}
 
 	#define writes(s) write(STDOUT_FILENO, s, strlen(s))
-	writes(" %F{8}[%F{green}");
+	writes(argv[1]);
 	writes(branch);
 	if (has_staged)
-		writes("%F{red} *");
+		writes(argv[2]);
 	if (has_unstaged)
-		writes("%F{yellow} +");
-	writes("%F{8}]");
+		writes(argv[3]);
+	writes(argv[4]);
 
 	return 0;
 }

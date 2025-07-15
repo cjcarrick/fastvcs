@@ -1,10 +1,10 @@
 CFLAGS += -std=c89 -Wall -Wpedantic \
 		  -O2 -march=native -mtune=native
 
-all: fastvcs.c
-	$(CC) $(CFLAGS) $^ -o fastvcs
+fastvcs: fastvcs.c
+	$(CC) $(CFLAGS) $^ -o $@
 
-install:
+install: fastvcs
 	@install -b ./fastvcs /usr/local/bin/
 
 clean:
